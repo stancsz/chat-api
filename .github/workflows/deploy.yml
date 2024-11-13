@@ -49,6 +49,8 @@ jobs:
         env:
           LAMBDA_FUNCTION_NAME: chat-api
           LAMBDA_ROLE_ARN: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/lambda-execution-role
+          VERIFY_TOKEN: ${{ secrets.VERIFY_TOKEN }}
+          PAGE_ACCESS_TOKEN: ${{ secrets.PAGE_ACCESS_TOKEN }}
         run: |
           set -e  # Exit immediately if a command exits with a non-zero status
 
@@ -58,6 +60,14 @@ jobs:
             aws lambda update-function-code \
               --function-name "$LAMBDA_FUNCTION_NAME" \
               --zip-file fileb://lambda_package.zip
+
+            # Wait for the code update to complete
+            echo "Waiting for function update to complete..."
+            sleep 20  # Wait 20 seconds (adjust if necessary)
+
+            aws lambda update-function-configuration \
+              --function-name "$LAMBDA_FUNCTION_NAME" \
+              --environment Variables="{VERIFY_TOKEN=\"$VERIFY_TOKEN\",PAGE_ACCESS_TOKEN=\"$PAGE_ACCESS_TOKEN\"}"
           else
             echo "Creating new Lambda function: $LAMBDA_FUNCTION_NAME"
             aws lambda create-function \
@@ -66,7 +76,7 @@ jobs:
               --role "$LAMBDA_ROLE_ARN" \
               --handler app.lambda_handler \
               --zip-file fileb://lambda_package.zip \
-              --environment Variables={ENV=production} \
+              --environment Variables="{VERIFY_TOKEN=\"$VERIFY_TOKEN\",PAGE_ACCESS_TOKEN=\"$PAGE_ACCESS_TOKEN\"}" \
               --timeout 15 \
               --memory-size 128
           fi

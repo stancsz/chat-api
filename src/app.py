@@ -3,6 +3,7 @@ import os
 import json
 import logging
 import uuid
+from mangum import Mangum
 
 # Configure logging
 logger = logging.getLogger()
@@ -47,6 +48,9 @@ def webhook():
     # Handle unsupported methods
     logger.warning(f"Request ID: {request_id} - Received an unsupported HTTP method.")
     return 'Method Not Allowed.', 405
+
+# Wrap the Flask app with Mangum for AWS Lambda
+handler = Mangum(app)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

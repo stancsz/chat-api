@@ -26,6 +26,11 @@ def webhook():
         params = request.args
         logger.info(f"Request ID: {request_id} - Received GET request with parameters: {params}")
 
+        # Check if this is a test request with "test=true"
+        if params.get('test') == 'true':
+            logger.info(f"Request ID: {request_id} - Test request received, responding with 'Hello, world!'")
+            return "Hello, world!", 200
+
         # Check if this is a Facebook verification request
         if params.get('hub.mode') == 'subscribe' and params.get('hub.verify_token') == verify_token:
             challenge = params.get('hub.challenge')

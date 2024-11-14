@@ -1,3 +1,4 @@
+from flask import Flask, request, jsonify
 import os
 import json
 import logging
@@ -7,23 +8,22 @@ import uuid
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-def lambda_handler(event, context):
+app = Flask(__name__)
+
+# Retrieve the verification token from environment variables
+verify_token = os.getenv('VERIFY_TOKEN')
+if not verify_token:
+    logger.error("VERIFY_TOKEN environment variable is not set.")
+
+@app.route('/webhook', methods=['GET', 'POST'])
+def webhook():
     # Generate a unique request ID for tracing
     request_id = str(uuid.uuid4())
-    logger.info(f"Request ID: {request_id} - Received event: {json.dumps(event)}")
-
-    # Retrieve the verification token from environment variables
-    verify_token = os.getenv('VERIFY_TOKEN')
-    if not verify_token:
-        logger.error(f"Request ID: {request_id} - VERIFY_TOKEN environment variable is not set.")
-        return {
-            'statusCode': 500,
-            'body': 'Server configuration error.'
-        }
+    logger.info(f"Request ID: {request_id} - Received event: {request.method}")
 
     # Handle GET requests for webhook verification
-    if event.get('requestContext', {}).get('http', {}).get('method') == 'GET':
-        params = event.get('queryStringParameters', {})
+    if request.method == 'GET':
+        params = request.args
         logger.info(f"Request ID: {request_id} - Received GET request with parameters: {params}")
 
         # Check if this is a Facebook verification request
@@ -31,28 +31,17 @@ def lambda_handler(event, context):
             challenge = params.get('hub.challenge')
             if challenge:
                 logger.info(f"Request ID: {request_id} - Webhook verified successfully.")
-                return {
-                    'statusCode': 200,
-                    'headers': {'Content-Type': 'text/plain'},
-                    'body': challenge
-                }
+                return challenge, 200
             else:
                 logger.error(f"Request ID: {request_id} - hub.challenge parameter is missing.")
-                return {
-                    'statusCode': 400,
-                    'body': 'Bad Request: Missing hub.challenge parameter.'
-                }
+                return 'Bad Request: Missing hub.challenge parameter.', 400
         else:
             logger.error(f"Request ID: {request_id} - Webhook verification failed. Invalid verify_token or mode.")
-            return {
-                'statusCode': 403,
-                'body': 'Forbidden: Verification failed.'
-            }
+            return 'Forbidden: Verification failed.', 403
 
-    # Log unsupported methods
-    else:
-        logger.warning(f"Request ID: {request_id} - Received an unsupported HTTP method.")
-        return {
-            'statusCode': 405,
-            'body': 'Method Not Allowed.'
-        }
+    # Handle unsupported methods
+    logger.warning(f"Request ID: {request_id} - Received an unsupported HTTP method.")
+    return 'Method Not Allowed.', 405
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)

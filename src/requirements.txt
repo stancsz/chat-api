@@ -2,4 +2,6 @@
 
 # List your project dependencies here
 # Example:
-# requests==2.25.1
+requests==2.25.1
+Flask==2.3.2
+gunicorn==20.1.0

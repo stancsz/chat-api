@@ -3,4 +3,5 @@
 # List your project dependencies here
 # Example:
 flask
+flask-asgi
 mangum

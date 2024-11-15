@@ -33,7 +33,6 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 
-  # Ensure the IAM role is created before attaching the policy
   depends_on = [aws_iam_role.lambda_execution]
 }
 
@@ -48,7 +47,7 @@ data "archive_file" "lambda_zip" {
 resource "aws_lambda_function" "flask_lambda" {
   function_name = "my-flask-lambda"
   role          = aws_iam_role.lambda_execution.arn
-  handler       = "app.handler"
+  handler       = "app.lambda_handler"
   runtime       = "python3.8"
   filename      = data.archive_file.lambda_zip.output_path
 
@@ -60,7 +59,6 @@ resource "aws_lambda_function" "flask_lambda" {
     }
   }
 
-  # Ensure the Lambda function is updated when the ZIP changes
   depends_on = [aws_iam_role_policy_attachment.lambda_basic_execution]
 }
 
@@ -77,7 +75,7 @@ resource "aws_api_gateway_resource" "proxy" {
   path_part   = "{proxy+}"
 }
 
-# 7. ANY Method for Proxy Resource
+# 7. ANY Method for Proxy Resource (Set authorization to NONE for public access)
 resource "aws_api_gateway_method" "proxy_method" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.proxy.id
@@ -95,7 +93,7 @@ resource "aws_api_gateway_integration" "proxy_integration" {
   uri                     = aws_lambda_function.flask_lambda.invoke_arn
 }
 
-# 9. ANY Method for Root Resource
+# 9. ANY Method for Root Resource (Set authorization to NONE for public access)
 resource "aws_api_gateway_method" "root_method" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_rest_api.api.root_resource_id

@@ -76,8 +76,8 @@ resource "aws_s3_object" "lambda_zip" {
 resource "aws_lambda_function" "flask_lambda" {
   function_name = "my-flask-lambda"
   role          = aws_iam_role.lambda_execution.arn
-  handler       = "app.lambda_handler"
-  runtime       = "python3.8"
+  handler       = "app.handler"
+  runtime       = "python3.10"
   s3_bucket     = aws_s3_object.lambda_zip.bucket
   s3_key        = aws_s3_object.lambda_zip.key
   

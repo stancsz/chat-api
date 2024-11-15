@@ -39,7 +39,7 @@ resource "aws_s3_bucket" "lambda_code_bucket" {
   # Provide a unique bucket name (change as needed)
   bucket = "my-flask-lambda-bucket"
   
-  # We remove versioning and acl configuration here
+  # ACL and versioning are managed via separate resources or default behaviors
 }
 
 # 4. Configure S3 bucket versioning
@@ -50,13 +50,7 @@ resource "aws_s3_bucket_versioning" "lambda_code_versioning" {
   }
 }
 
-# 5. Configure S3 bucket ACL (optional if you want a specific ACL)
-resource "aws_s3_bucket_acl" "lambda_code_acl" {
-  bucket = aws_s3_bucket.lambda_code_bucket.id
-  acl    = "private"
-}
-
-# 6. Null Resource for Controlled Packaging of Lambda Function
+# 5. Null Resource for Controlled Packaging of Lambda Function
 resource "null_resource" "package_lambda" {
   provisioner "local-exec" {
     command = "python package_lambda.py"
@@ -69,7 +63,7 @@ resource "null_resource" "package_lambda" {
   }
 }
 
-# 7. Upload the packaged Lambda zip file to S3
+# 6. Upload the packaged Lambda zip file to S3
 resource "aws_s3_object" "lambda_zip" {
   depends_on  = [null_resource.package_lambda]  # Ensure packaging finishes first
   bucket      = aws_s3_bucket.lambda_code_bucket.id
@@ -78,7 +72,7 @@ resource "aws_s3_object" "lambda_zip" {
   etag        = filemd5("${path.module}/app.zip")
 }
 
-# 8. Lambda function configuration using S3
+# 7. Lambda function configuration using S3
 resource "aws_lambda_function" "flask_lambda" {
   function_name = "my-flask-lambda"
   role          = aws_iam_role.lambda_execution.arn
@@ -102,20 +96,20 @@ resource "aws_lambda_function" "flask_lambda" {
   ]
 }
 
-# 9. API Gateway REST API
+# 8. API Gateway REST API
 resource "aws_api_gateway_rest_api" "api" {
   name        = "MyFlaskAPI"
   description = "API for my Flask Lambda"
 }
 
-# 10. Proxy Resource (/{proxy+})
+# 9. Proxy Resource (/{proxy+})
 resource "aws_api_gateway_resource" "proxy" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   parent_id   = aws_api_gateway_rest_api.api.root_resource_id
   path_part   = "{proxy+}"
 }
 
-# 11. ANY Method for Proxy Resource (Set authorization to NONE for public access)
+# 10. ANY Method for Proxy Resource (Set authorization to NONE for public access)
 resource "aws_api_gateway_method" "proxy_method" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.proxy.id
@@ -123,7 +117,7 @@ resource "aws_api_gateway_method" "proxy_method" {
   authorization = "NONE"
 }
 
-# 12. Integration for Proxy Method
+# 11. Integration for Proxy Method
 resource "aws_api_gateway_integration" "proxy_integration" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.proxy.id
@@ -133,7 +127,7 @@ resource "aws_api_gateway_integration" "proxy_integration" {
   uri                     = aws_lambda_function.flask_lambda.invoke_arn
 }
 
-# 13. ANY Method for Root Resource (Set authorization to NONE for public access)
+# 12. ANY Method for Root Resource (Set authorization to NONE for public access)
 resource "aws_api_gateway_method" "root_method" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_rest_api.api.root_resource_id
@@ -141,7 +135,7 @@ resource "aws_api_gateway_method" "root_method" {
   authorization = "NONE"
 }
 
-# 14. Integration for Root Method
+# 13. Integration for Root Method
 resource "aws_api_gateway_integration" "root_integration" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_rest_api.api.root_resource_id
@@ -151,7 +145,7 @@ resource "aws_api_gateway_integration" "root_integration" {
   uri                     = aws_lambda_function.flask_lambda.invoke_arn
 }
 
-# 15. Deploy API Gateway
+# 14. Deploy API Gateway
 resource "aws_api_gateway_deployment" "api_deployment" {
   depends_on = [
     aws_api_gateway_integration.proxy_integration,
@@ -162,7 +156,7 @@ resource "aws_api_gateway_deployment" "api_deployment" {
   stage_name  = "prod"
 }
 
-# 16. Grant API Gateway Permission to Invoke Lambda
+# 15. Grant API Gateway Permission to Invoke Lambda
 resource "aws_lambda_permission" "api_gateway" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
@@ -171,7 +165,7 @@ resource "aws_lambda_permission" "api_gateway" {
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
 }
 
-# 17. Output the API URL
+# 16. Output the API URL
 output "api_url" {
   value       = aws_api_gateway_deployment.api_deployment.invoke_url
   description = "Base URL of the deployed API"

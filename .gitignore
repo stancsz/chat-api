@@ -20,6 +20,7 @@ crash.log
 terraform.rc
 .terraform*
 *.zip
+package/
 
 
 # Files created by Terragrunt

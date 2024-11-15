@@ -32,26 +32,36 @@ resource "aws_iam_role" "lambda_execution" {
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-
-  depends_on = [aws_iam_role.lambda_execution]
 }
 
-# 3. Package Lambda Function Code
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/src"
-  output_path = "${path.module}/app.zip"
+# 3. Create a Null Resource for Controlled Packaging
+# Calculate the checksum of the source directory for better consistency
+data "local_file" "app_hash" {
+  filename = "${path.module}/src/app.py"
 }
 
-# 4. Lambda Function
+# Null resource to package the Lambda function only when the source code changes
+resource "null_resource" "package_lambda" {
+  provisioner "local-exec" {
+    command = "python package_lambda.py"
+  }
+
+  # Trigger the null resource only when the source file changes
+  triggers = {
+    app_hash = data.local_file.app_hash.content
+  }
+}
+
+# Lambda function configuration
 resource "aws_lambda_function" "flask_lambda" {
   function_name = "my-flask-lambda"
   role          = aws_iam_role.lambda_execution.arn
-  handler       = "app.lambda_handler"
+  handler       = "app.handler"
   runtime       = "python3.8"
-  filename      = data.archive_file.lambda_zip.output_path
-
-  source_code_hash = filebase64sha256(data.archive_file.lambda_zip.output_path)
+  filename      = "${path.module}/app.zip"
+  
+  # Explicit source_code_hash to maintain consistency
+  source_code_hash = filebase64sha256("${path.module}/app.zip")
 
   environment {
     variables = {
@@ -59,7 +69,14 @@ resource "aws_lambda_function" "flask_lambda" {
     }
   }
 
-  depends_on = [aws_iam_role_policy_attachment.lambda_basic_execution]
+  lifecycle {
+    ignore_changes = [source_code_hash]
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.lambda_basic_execution,
+    null_resource.package_lambda
+  ]
 }
 
 # 5. API Gateway REST API

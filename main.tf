@@ -154,6 +154,11 @@ resource "aws_api_gateway_deployment" "api_deployment" {
 
   rest_api_id = aws_api_gateway_rest_api.api.id
   stage_name  = "prod"
+
+  # Trigger redeployment when Lambda code changes
+  triggers = {
+    redeploy = filebase64sha256("${path.module}/app.zip")
+  }
 }
 
 # 15. Grant API Gateway Permission to Invoke Lambda

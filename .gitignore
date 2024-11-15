@@ -21,6 +21,7 @@ terraform.rc
 .terraform*
 *.zip
 package/
+.env
 
 
 # Files created by Terragrunt

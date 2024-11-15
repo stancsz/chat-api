@@ -9,6 +9,7 @@ def lambda_handler(event, context):
     try:
         prompt = event['prompt']
         api_key = ''
+
         if not api_key:
             raise ValueError("OpenAI API key not found.")
         client = OpenAI(api_key=api_key)

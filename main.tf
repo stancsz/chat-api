@@ -36,10 +36,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 
 # 3. Create an S3 bucket to store Lambda code
 resource "aws_s3_bucket" "lambda_code_bucket" {
-  # Provide a unique bucket name (change as needed)
-  bucket = "my-flask-lambda-bucket"
-  
-  # ACL and versioning are managed via separate resources or default behaviors
+  bucket = "my-lambda-function-bucket"
 }
 
 # 4. Configure S3 bucket versioning
@@ -57,15 +54,13 @@ resource "null_resource" "package_lambda" {
   }
 
   triggers = {
-    # Using the sha256 hash of the app.py content ensures
-    # packaging only happens when the source code changes
     app_hash = filebase64sha256("${path.module}/src/app.py")
   }
 }
 
 # 6. Upload the packaged Lambda zip file to S3
 resource "aws_s3_object" "lambda_zip" {
-  depends_on  = [null_resource.package_lambda]  # Ensure packaging finishes first
+  depends_on  = [null_resource.package_lambda]
   bucket      = aws_s3_bucket.lambda_code_bucket.id
   key         = "app.zip"
   source      = "${path.module}/app.zip"
@@ -73,15 +68,14 @@ resource "aws_s3_object" "lambda_zip" {
 }
 
 # 7. Lambda function configuration using S3
-resource "aws_lambda_function" "flask_lambda" {
-  function_name = "my-flask-lambda"
-  role          = aws_iam_role.lambda_execution.arn
-  handler       = "app.lambda_handler"
-  runtime       = "python3.10"
-  s3_bucket     = aws_s3_object.lambda_zip.bucket
-  s3_key        = aws_s3_object.lambda_zip.key
-  
-  # Explicit source_code_hash to maintain consistency
+resource "aws_lambda_function" "lambda_function" {
+  function_name    = "my-lambda-function"
+  role             = aws_iam_role.lambda_execution.arn
+  handler          = "app.lambda_handler"
+  runtime          = "python3.10"
+  architectures    = ["x86_64"]
+  s3_bucket        = aws_s3_object.lambda_zip.bucket
+  s3_key           = aws_s3_object.lambda_zip.key
   source_code_hash = filebase64sha256("${path.module}/app.zip")
 
   environment {
@@ -98,8 +92,8 @@ resource "aws_lambda_function" "flask_lambda" {
 
 # 8. API Gateway REST API
 resource "aws_api_gateway_rest_api" "api" {
-  name        = "MyFlaskAPI"
-  description = "API for my Flask Lambda"
+  name        = "MyLambdaAPI"
+  description = "API for my Lambda function"
 }
 
 # 9. Proxy Resource (/{proxy+})
@@ -109,7 +103,7 @@ resource "aws_api_gateway_resource" "proxy" {
   path_part   = "{proxy+}"
 }
 
-# 10. ANY Method for Proxy Resource (Set authorization to NONE for public access)
+# 10. ANY Method for Proxy Resource
 resource "aws_api_gateway_method" "proxy_method" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.proxy.id
@@ -124,10 +118,10 @@ resource "aws_api_gateway_integration" "proxy_integration" {
   http_method             = aws_api_gateway_method.proxy_method.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.flask_lambda.invoke_arn
+  uri                     = aws_lambda_function.lambda_function.invoke_arn
 }
 
-# 12. ANY Method for Root Resource (Set authorization to NONE for public access)
+# 12. ANY Method for Root Resource
 resource "aws_api_gateway_method" "root_method" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_rest_api.api.root_resource_id
@@ -142,7 +136,7 @@ resource "aws_api_gateway_integration" "root_integration" {
   http_method             = aws_api_gateway_method.root_method.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.flask_lambda.invoke_arn
+  uri                     = aws_lambda_function.lambda_function.invoke_arn
 }
 
 # 14. Deploy API Gateway
@@ -155,7 +149,6 @@ resource "aws_api_gateway_deployment" "api_deployment" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   stage_name  = "prod"
 
-  # Trigger redeployment when Lambda code changes
   triggers = {
     redeploy = filebase64sha256("${path.module}/app.zip")
   }
@@ -165,7 +158,7 @@ resource "aws_api_gateway_deployment" "api_deployment" {
 resource "aws_lambda_permission" "api_gateway" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.flask_lambda.function_name
+  function_name = aws_lambda_function.lambda_function.function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.api.execution_arn}/*/*"
 }
